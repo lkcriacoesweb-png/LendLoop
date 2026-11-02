@@ -1,0 +1,187 @@
+{
+  "name": "LendLoop — A · Request notification",
+  "nodes": [
+    {
+      "id": "lendloop-1",
+      "name": "Request webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "lendloop-events",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "webhookId": "lendloop-request-events"
+    },
+    {
+      "id": "lendloop-2",
+      "name": "Verify signed event",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        230,
+        0
+      ],
+      "parameters": {
+        "jsCode": "const { createHmac, timingSafeEqual } = require('crypto');\nconst secret = $env.AUTOMATION_OUTBOUND_SECRET;\nif (!secret || secret.length < 32) throw new Error('Missing automation secret');\nconst e = $input.first().json.body;\nif (!e || !Number.isSafeInteger(e.timestamp) || Math.abs(Date.now()-e.timestamp)>300000 || typeof e.nonce!=='string' || !/^[a-zA-Z0-9_-]{16,100}$/.test(e.nonce) || typeof e.payload!=='string' || e.payload.length>32000 || typeof e.signature!=='string' || !/^[a-f0-9]{64}$/.test(e.signature)) throw new Error('Invalid or expired envelope');\nconst expected = createHmac('sha256', secret).update(['v1','POST','/webhook/lendloop-events',String(e.timestamp),e.nonce,e.payload].join('\\n')).digest();\nif (!timingSafeEqual(expected, Buffer.from(e.signature, 'hex'))) throw new Error('Invalid signature');\nconst event = JSON.parse(e.payload);\nif (!event || Object.keys(event).some(k=>!['eventId','token','kind','status','recipientRef'].includes(k)) || typeof event.eventId!=='string' || typeof event.token!=='string' || typeof event.recipientRef!=='string' || event.kind!=='request' || !['pending','approved','declined','cancelled','returned'].includes(event.status)) throw new Error('Invalid event');\nreturn [{ json: { event } }];"
+      }
+    },
+    {
+      "id": "lendloop-3",
+      "name": "Prepare claim",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        460,
+        0
+      ],
+      "parameters": {
+        "jsCode": "const { createHmac, randomUUID } = require('crypto');\nfunction signed(route, body) {\n  const secret = $env.AUTOMATION_INBOUND_SECRET;\n  if (!secret || secret.length < 32) throw new Error('Missing automation secret');\n  const timestamp = Date.now(), nonce = randomUUID(), payload = JSON.stringify(body);\n  const signature = createHmac('sha256', secret).update(['v1','POST',route,String(timestamp),nonce,payload].join('\\n')).digest('hex');\n  return { timestamp, nonce, payload, signature };\n}\nreturn $input.all().map((item, i) => ({ json: { event: item.json.event, envelope: signed('/automation/claim', { eventId:item.json.event.eventId, token:item.json.event.token }) }, pairedItem:{item:i} }));"
+      }
+    },
+    {
+      "id": "lendloop-4",
+      "name": "Claim once",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        690,
+        0
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.CONVEX_SITE_URL + '/automation/claim' }}",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify($json.envelope) }}",
+        "options": {
+          "timeout": 15000,
+          "redirect": {
+            "redirect": {
+              "followRedirects": false
+            }
+          }
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1500
+    },
+    {
+      "id": "lendloop-5",
+      "name": "Simulate notification",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        920,
+        0
+      ],
+      "parameters": {
+        "jsCode": "const { createHmac, randomUUID } = require('crypto');\nfunction signed(route, body) {\n  const secret = $env.AUTOMATION_INBOUND_SECRET;\n  if (!secret || secret.length < 32) throw new Error('Missing automation secret');\n  const timestamp = Date.now(), nonce = randomUUID(), payload = JSON.stringify(body);\n  const signature = createHmac('sha256', secret).update(['v1','POST',route,String(timestamp),nonce,payload].join('\\n')).digest('hex');\n  return { timestamp, nonce, payload, signature };\n}\nconst output=[];\nfor (let i=0; i<$input.all().length; i++) {\n  const item=$input.all()[i]; if (item.json.process !== true) continue;\n  const event=$('Prepare claim').itemMatching(i).json.event;\n  // This is a LOGGED MOCK notification, not email delivery. Never log tokens or people.\n  console.log(JSON.stringify({ eventId:event.eventId, kind:event.kind, outcome:'simulated' }));\n  const completion={ eventId:event.eventId, token:event.token, outcome:'simulated', executionId:String($execution.id) };\n  output.push({ json:{ eventId:event.eventId, outcome:'simulated', envelope:signed('/automation/complete',completion) }, pairedItem:{item:i} });\n}\nreturn output;"
+      }
+    },
+    {
+      "id": "lendloop-6",
+      "name": "Record result",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1150,
+        0
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.CONVEX_SITE_URL + '/automation/complete' }}",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify($json.envelope) }}",
+        "options": {
+          "timeout": 15000,
+          "redirect": {
+            "redirect": {
+              "followRedirects": false
+            }
+          }
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1500
+    }
+  ],
+  "connections": {
+    "Request webhook": {
+      "main": [
+        [
+          {
+            "node": "Verify signed event",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verify signed event": {
+      "main": [
+        [
+          {
+            "node": "Prepare claim",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare claim": {
+      "main": [
+        [
+          {
+            "node": "Claim once",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claim once": {
+      "main": [
+        [
+          {
+            "node": "Simulate notification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Simulate notification": {
+      "main": [
+        [
+          {
+            "node": "Record result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "UTC",
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "none",
+    "saveManualExecutions": true,
+    "executionTimeout": 120
+  },
+  "pinData": {},
+  "tags": []
+}

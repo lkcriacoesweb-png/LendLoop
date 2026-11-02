@@ -1,0 +1,254 @@
+{
+  "name": "LendLoop — B · Daily overdue reminders",
+  "nodes": [
+    {
+      "id": "lendloop-7",
+      "name": "Daily window and recovery",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "*/15 9-23 * * *"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "lendloop-8",
+      "name": "Prepare overdue fetch",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        230,
+        0
+      ],
+      "parameters": {
+        "jsCode": "const { createHmac, randomUUID } = require('crypto');\nfunction signed(route, body) {\n  const secret = $env.AUTOMATION_INBOUND_SECRET;\n  if (!secret || secret.length < 32) throw new Error('Missing automation secret');\n  const timestamp = Date.now(), nonce = randomUUID(), payload = JSON.stringify(body);\n  const signature = createHmac('sha256', secret).update(['v1','POST',route,String(timestamp),nonce,payload].join('\\n')).digest('hex');\n  return { timestamp, nonce, payload, signature };\n}\nreturn [{json:{envelope:signed('/automation/overdue',{})}}];"
+      }
+    },
+    {
+      "id": "lendloop-9",
+      "name": "Fetch overdue",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        460,
+        0
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.CONVEX_SITE_URL + '/automation/overdue' }}",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify($json.envelope) }}",
+        "options": {
+          "timeout": 15000,
+          "redirect": {
+            "redirect": {
+              "followRedirects": false
+            }
+          }
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1500
+    },
+    {
+      "id": "lendloop-10",
+      "name": "Each eligible reminder",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        690,
+        0
+      ],
+      "parameters": {
+        "jsCode": "const events=$input.first().json.events;\nif (!Array.isArray(events)) throw new Error('Invalid overdue response');\nreturn events.map(event=>({json:{event},pairedItem:{item:0}}));"
+      }
+    },
+    {
+      "id": "lendloop-11",
+      "name": "Prepare claim",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        920,
+        0
+      ],
+      "parameters": {
+        "jsCode": "const { createHmac, randomUUID } = require('crypto');\nfunction signed(route, body) {\n  const secret = $env.AUTOMATION_INBOUND_SECRET;\n  if (!secret || secret.length < 32) throw new Error('Missing automation secret');\n  const timestamp = Date.now(), nonce = randomUUID(), payload = JSON.stringify(body);\n  const signature = createHmac('sha256', secret).update(['v1','POST',route,String(timestamp),nonce,payload].join('\\n')).digest('hex');\n  return { timestamp, nonce, payload, signature };\n}\nreturn $input.all().map((item, i) => ({ json: { event: item.json.event, envelope: signed('/automation/claim', { eventId:item.json.event.eventId, token:item.json.event.token }) }, pairedItem:{item:i} }));"
+      }
+    },
+    {
+      "id": "lendloop-12",
+      "name": "Claim once",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1150,
+        0
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.CONVEX_SITE_URL + '/automation/claim' }}",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify($json.envelope) }}",
+        "options": {
+          "timeout": 15000,
+          "redirect": {
+            "redirect": {
+              "followRedirects": false
+            }
+          }
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1500
+    },
+    {
+      "id": "lendloop-13",
+      "name": "Simulate notification",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1380,
+        0
+      ],
+      "parameters": {
+        "jsCode": "const { createHmac, randomUUID } = require('crypto');\nfunction signed(route, body) {\n  const secret = $env.AUTOMATION_INBOUND_SECRET;\n  if (!secret || secret.length < 32) throw new Error('Missing automation secret');\n  const timestamp = Date.now(), nonce = randomUUID(), payload = JSON.stringify(body);\n  const signature = createHmac('sha256', secret).update(['v1','POST',route,String(timestamp),nonce,payload].join('\\n')).digest('hex');\n  return { timestamp, nonce, payload, signature };\n}\nconst output=[];\nfor (let i=0; i<$input.all().length; i++) {\n  const item=$input.all()[i]; if (item.json.process !== true) continue;\n  const event=$('Prepare claim').itemMatching(i).json.event;\n  // This is a LOGGED MOCK notification, not email delivery. Never log tokens or people.\n  console.log(JSON.stringify({ eventId:event.eventId, kind:event.kind, outcome:'simulated' }));\n  const completion={ eventId:event.eventId, token:event.token, outcome:'simulated', executionId:String($execution.id) };\n  output.push({ json:{ eventId:event.eventId, outcome:'simulated', envelope:signed('/automation/complete',completion) }, pairedItem:{item:i} });\n}\nreturn output;"
+      }
+    },
+    {
+      "id": "lendloop-14",
+      "name": "Record result",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1610,
+        0
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.CONVEX_SITE_URL + '/automation/complete' }}",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify($json.envelope) }}",
+        "options": {
+          "timeout": 15000,
+          "redirect": {
+            "redirect": {
+              "followRedirects": false
+            }
+          }
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1500
+    }
+  ],
+  "connections": {
+    "Daily window and recovery": {
+      "main": [
+        [
+          {
+            "node": "Prepare overdue fetch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare overdue fetch": {
+      "main": [
+        [
+          {
+            "node": "Fetch overdue",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch overdue": {
+      "main": [
+        [
+          {
+            "node": "Each eligible reminder",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Each eligible reminder": {
+      "main": [
+        [
+          {
+            "node": "Prepare claim",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare claim": {
+      "main": [
+        [
+          {
+            "node": "Claim once",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claim once": {
+      "main": [
+        [
+          {
+            "node": "Simulate notification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Simulate notification": {
+      "main": [
+        [
+          {
+            "node": "Record result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "UTC",
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "none",
+    "saveManualExecutions": true,
+    "executionTimeout": 120
+  },
+  "pinData": {},
+  "tags": []
+}

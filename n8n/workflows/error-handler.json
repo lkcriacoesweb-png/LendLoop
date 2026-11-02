@@ -1,0 +1,53 @@
+{
+  "name": "LendLoop — C · Sanitized error log",
+  "nodes": [
+    {
+      "id": "lendloop-15",
+      "name": "Workflow failed",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "lendloop-16",
+      "name": "Log failure reference",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        230,
+        0
+      ],
+      "parameters": {
+        "jsCode": "const data=$input.first().json;\nconst output={ outcome:'workflow_failed', workflowId:String(data.workflow?.id || 'unknown'), executionId:String(data.execution?.id || 'unknown') };\nconsole.error(JSON.stringify(output)); return [{json:output}];"
+      }
+    }
+  ],
+  "connections": {
+    "Workflow failed": {
+      "main": [
+        [
+          {
+            "node": "Log failure reference",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "UTC",
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "none",
+    "saveManualExecutions": true,
+    "executionTimeout": 120
+  },
+  "pinData": {},
+  "tags": []
+}
