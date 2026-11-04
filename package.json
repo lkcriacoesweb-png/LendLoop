@@ -11,7 +11,7 @@
     "test:watch": "vitest",
     "workflows": "node scripts/build-workflows.mjs",
     "check:secrets": "node scripts/check-secrets.mjs",
-    "format": "prettier --write app components convex lib scripts tests docs README.md package.json tsconfig.json next.config.ts proxy.ts vitest.config.ts compose.yaml",
+    "format": "prettier --write app components convex lib scripts tests docs README.md package.json tsconfig.json next.config.ts proxy.ts vitest.config.ts compose.yaml compose.hosted.yaml",
     "check": "npm run typecheck && npm test && npm run check:secrets && npm run build"
   },
   "dependencies": {

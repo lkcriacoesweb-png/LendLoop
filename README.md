@@ -62,7 +62,8 @@ flowchart LR
 - `n8n/workflows/`: three importable exports; no credentials.
 - `scripts/build-workflows.mjs`: readable source for the exported workflows.
 - `tests/`: authorization, lending, transport, outbox, and workflow contract tests.
-- `docs/`: production gaps, verification, demonstration and interview preparation.
+- `docs/`: production gaps, live verification ledger and demonstration script.
+- `compose.yaml` (local, loopback only) and `compose.hosted.yaml` (behind HTTPS): the n8n service.
 
 ## Connect Clerk and Convex
 
@@ -111,7 +112,7 @@ Use the same function with `role: "user"` to revoke. This is administrative depl
 6. Import `n8n/workflows/error-handler.json` first using n8n **Import from file**. Save it. Import `request-notification.json` and `overdue-reminders.json`. In **Settings** for each of those two workflows, select **LendLoop — C · Sanitized error log** as the Error Workflow, then save. IDs differ per installation, so the export does not hard-code the error workflow ID.
 7. Confirm Code nodes can access `crypto` and the two automation environment variables. The supplied Compose sets `NODE_FUNCTION_ALLOW_BUILTIN=crypto` and permits environment access for these trusted workflows. Do not grant untrusted users workflow-editor access to this local instance.
 8. Publish/activate workflows A and B. A uses the permanent path `/webhook/lendloop-events`. The HMAC binds this exact path; `/webhook-test/` deliberately does not work with this export.
-9. Set `N8N_WEBHOOK_URL` in Convex to the **reachable** permanent webhook URL. A cloud Convex deployment cannot reach your PC's `localhost`. Choose an isolated n8n development service on your dedicated host over HTTPS, or arrange an explicitly authorized development tunnel. Do not assume `WEBHOOK_URL` exposes a local service; it only tells n8n its external URL. No tunnel or public deployment has been created by this repository.
+9. Set `N8N_WEBHOOK_URL` in Convex to the **reachable** permanent webhook URL. A cloud Convex deployment cannot reach your PC's `localhost`, so the live demo uses the hosted instance described in [Host n8n for the live demo](#host-n8n-for-the-live-demo). Do not assume `WEBHOOK_URL` exposes a local service; it only tells n8n its external URL.
 10. Create a request and inspect n8n Executions and the Convex `events` / `notificationResults` tables. Only an authenticated completion callback sets `simulated`. An HTTP 200 from the webhook alone is not success.
 
 Workflow B runs in the **09:00–23:45 UTC daily window**, every 15 minutes, to recover failed attempts. A durable key `loanId:reminder:YYYY-MM-DD` limits the logical reminder to once per UTC day. Manually executing B is allowed in a development deployment. A maximum of 100 overdue loans is scanned per execution; increase this with pagination before scaling beyond the exercise.
@@ -176,13 +177,38 @@ Only Clerk stores credentials and login contact details. Business profiles store
 
 There is no payment system, messaging, address exchange, real email delivery or account erasure UI. Listing and loan views are capped at 200; no production pagination exists. n8n successful execution storage is disabled, failed executions are retained for 72 hours, and receipt cleanup runs every ten minutes. Business/audit records are retained for the development exercise; production retention and erasure policy are not implemented. Font loading currently uses Google Fonts with system fallbacks; review external requests or self-host fonts for production. Details: [production readiness](docs/production.md).
 
-## Deployment later
+## Host n8n for the live demo
 
-Keep the repository private during review. Nothing here publishes automatically. For Vercel, import the repository only after authorization, configure the Next.js variables for the appropriate Clerk/Convex environment, deploy the backend with `npx convex deploy`, and rebuild the frontend with that deployment URL. Use a separately secured n8n host; Vercel does not run this Compose service. Do not reuse development credentials for production. A dedicated server may run the Next.js app and n8n as separate services, but keep Convex as the required backend. Review the full [live checklist](docs/verification.md) before submission.
+`compose.hosted.yaml` runs the same pinned n8n image behind an HTTPS reverse proxy (I use Coolify/Traefik on a dedicated server), with its own host name, volume and secrets; nothing is shared with other services. It exposes no host port, enables secure cookies and takes every value from the hosting platform's environment settings:
 
-## AI assistance and ownership
+| Variable                                                  | Value                                                         |
+| --------------------------------------------------------- | ------------------------------------------------------------- |
+| `N8N_HOST`                                                | Public host name; the platform terminates TLS for it          |
+| `N8N_ENCRYPTION_KEY`                                      | Random 32+ characters; back it up together with the volume    |
+| `AUTOMATION_OUTBOUND_SECRET`, `AUTOMATION_INBOUND_SECRET` | The same two values set in Convex                             |
+| `CONVEX_SITE_URL`                                         | The `.convex.site` HTTP Actions URL of the target deployment |
 
-The implementation, tests, design and documentation were developed with an AI coding assistant. Lucas supplied the target assignment, local-first scope and hosting preferences. Architecture and security-policy choices in this iteration were proposed by the assistant; Lucas still needs to review them, run the live demonstration and practice the exercises. No claim is made that unrun integrations have been verified or that Lucas already has production AWS/Clerk/Convex experience. See [interview preparation in Portuguese](docs/interview-guide-pt.md).
+After the first start, create the owner account with a strong password and MFA, import the three workflows as in steps 6–8 above, and set `N8N_WEBHOOK_URL` in Convex to `https://<N8N_HOST>/webhook/lendloop-events`. The editor stays behind the owner login; it is a single-owner demo instance with fictional data, not a hardened production setup (see [production readiness](docs/production.md)).
+
+## Deploy the web app
+
+Nothing here publishes automatically, and the repository stays private during review.
+
+1. In the target Convex deployment, set `CLERK_JWT_ISSUER_DOMAIN`, `N8N_WEBHOOK_URL` and the two automation secrets.
+2. Import the repository in Vercel (framework Next.js, Node.js 22.x). Add `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` and `CLERK_SECRET_KEY` from the same Clerk instance, and `CONVEX_DEPLOY_KEY` (a deploy key for that Convex deployment, Production environment only).
+3. Override the build command so functions and frontend ship together and the frontend receives the right deployment URL:
+
+   ```sh
+   npx convex deploy --cmd-url-env-var-name NEXT_PUBLIC_CONVEX_URL --cmd "npm run build"
+   ```
+
+4. Open `/workspace` on the deployment URL, sign in, and run the [live checklist](docs/verification.md).
+
+A `*.vercel.app` URL works with a Clerk **development** instance. A Clerk production instance needs a custom domain and its own keys; never mix the issuer of one instance with the keys of another.
+
+## How I built this
+
+I built LendLoop with AI coding assistants, which the brief explicitly allows. I set the scope, the stack choices within the brief and the hosting, and I own the result: the architecture, the authorization model in Convex and the signing protocol are documented above so every decision can be questioned, and nothing is described as working unless the automated tests or the [live verification ledger](docs/verification.md) show it. AWS is not part of this exercise and is not claimed here.
 
 ## Official references consulted
 

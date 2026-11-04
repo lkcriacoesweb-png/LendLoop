@@ -1,0 +1,40 @@
+# Hosted n8n for the LendLoop demo (fictional data only), behind an HTTPS reverse proxy
+# (for example Coolify/Traefik). Every value comes from the hosting platform's environment
+# settings, never from this file or from Git. See README "Host n8n for the live demo".
+name: lendloop-n8n
+services:
+  n8n:
+    image: docker.n8n.io/n8nio/n8n:2.45.7
+    restart: unless-stopped
+    expose:
+      - "5678"
+    environment:
+      TZ: UTC
+      GENERIC_TIMEZONE: UTC
+      N8N_HOST: ${N8N_HOST:?public host name, e.g. n8n-lendloop.example.com}
+      N8N_PORT: "5678"
+      N8N_PROTOCOL: https
+      WEBHOOK_URL: https://${N8N_HOST}/
+      N8N_PROXY_HOPS: "1"
+      N8N_SECURE_COOKIE: "true"
+      N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY:?random 32+ characters, backed up with the volume}
+      AUTOMATION_OUTBOUND_SECRET: ${AUTOMATION_OUTBOUND_SECRET:?same value as in Convex}
+      AUTOMATION_INBOUND_SECRET: ${AUTOMATION_INBOUND_SECRET:?same value as in Convex}
+      CONVEX_SITE_URL: ${CONVEX_SITE_URL:?https://<deployment>.convex.site}
+      # Trusted single-owner demo: Code nodes read the two automation secrets and use crypto.
+      N8N_RUNNERS_ENABLED: "true"
+      N8N_RUNNERS_MODE: internal
+      NODE_FUNCTION_ALLOW_BUILTIN: crypto
+      N8N_BLOCK_ENV_ACCESS_IN_NODE: "false"
+      N8N_DIAGNOSTICS_ENABLED: "false"
+      N8N_PERSONALIZATION_ENABLED: "false"
+      N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS: "true"
+      N8N_PAYLOAD_SIZE_MAX: "1"
+      EXECUTIONS_DATA_PRUNE: "true"
+      EXECUTIONS_DATA_MAX_AGE: "72"
+      EXECUTIONS_DATA_SAVE_ON_SUCCESS: none
+      EXECUTIONS_DATA_SAVE_ON_ERROR: all
+    volumes:
+      - n8n_data:/home/node/.n8n
+volumes:
+  n8n_data:
