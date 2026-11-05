@@ -8,39 +8,58 @@
  * @module
  */
 
+import type * as automation from "../automation.js";
+import type * as crons from "../crons.js";
+import type * as dispatch from "../dispatch.js";
+import type * as http from "../http.js";
+import type * as loans from "../loans.js";
+import type * as model from "../model.js";
+import type * as profiles from "../profiles.js";
+import type * as seed from "../seed.js";
+import type * as tools from "../tools.js";
+
 import type {
   ApiFromModules,
   FilterApi,
   FunctionReference,
 } from "convex/server";
-import type * as automation from "../automation.js";
-import type * as dispatch from "../dispatch.js";
-import type * as loans from "../loans.js";
-import type * as profiles from "../profiles.js";
-import type * as seed from "../seed.js";
-import type * as tools from "../tools.js";
+
+declare const fullApi: ApiFromModules<{
+  automation: typeof automation;
+  crons: typeof crons;
+  dispatch: typeof dispatch;
+  http: typeof http;
+  loans: typeof loans;
+  model: typeof model;
+  profiles: typeof profiles;
+  seed: typeof seed;
+  tools: typeof tools;
+}>;
 
 /**
- * A utility for referencing Convex functions in your app's API.
+ * A utility for referencing Convex functions in your app's public API.
  *
  * Usage:
  * ```js
  * const myFunctionReference = api.myModule.myFunction;
  * ```
  */
-declare const fullApi: ApiFromModules<{
-  automation: typeof automation;
-  dispatch: typeof dispatch;
-  loans: typeof loans;
-  profiles: typeof profiles;
-  seed: typeof seed;
-  tools: typeof tools;
-}>;
 export declare const api: FilterApi<
   typeof fullApi,
   FunctionReference<any, "public">
 >;
+
+/**
+ * A utility for referencing Convex functions in your app's internal API.
+ *
+ * Usage:
+ * ```js
+ * const myFunctionReference = internal.myModule.myFunction;
+ * ```
+ */
 export declare const internal: FilterApi<
   typeof fullApi,
   FunctionReference<any, "internal">
 >;
+
+export declare const components: {};
