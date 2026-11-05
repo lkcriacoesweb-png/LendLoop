@@ -4,7 +4,7 @@
 
 A neighborhood tool-lending board built for the Fluence take-home assignment. Neighbors list tools, request inclusive date ranges, approve or decline requests, and confirm returns. Convex enforces authorization and reservation rules. n8n handles logged mock notifications and overdue reminders.
 
-**Status:** local implementation, production build, and local automated tests are available. Clerk sign-in, a deployed Convex backend, and actual n8n workflow executions are **not yet verified**. The browser preview is fictional and does not authenticate users or deliver notifications. See [verification](docs/verification.md) before treating this as a completed submission.
+**Status:** deployed at https://lendloop-xi.vercel.app (Convex production, Clerk development instance, hosted n8n) and verified live on November 5, 2026 (UTC). Every item in the [live verification ledger](docs/verification.md) passed except the overdue-reminder pair, which can only run once the test loan is overdue (first window: November 6, 09:00 UTC). The live run found three defects in the n8n setup; all are fixed and listed in the ledger. The `/preview` page is a local, fictional UI preview and is disabled in production.
 
 ## Quick local preview (no accounts)
 
@@ -111,7 +111,7 @@ Use the same function with `role: "user"` to revoke. This is administrative depl
 5. Run `docker compose up -d`. Open `http://localhost:5678` and create the local owner account. This Compose binds to loopback, uses persistent named storage and internal task runners for an isolated, single-owner, fictional-data environment. See [production](docs/production.md) before changing its exposure.
 6. Import `n8n/workflows/error-handler.json` first using n8n **Import from file**. Save it. Import `request-notification.json` and `overdue-reminders.json`. In **Settings** for each of those two workflows, select **LendLoop — C · Sanitized error log** as the Error Workflow, then save. IDs differ per installation, so the export does not hard-code the error workflow ID.
 7. Confirm Code nodes can access `crypto` and the two automation environment variables. The supplied Compose sets `NODE_FUNCTION_ALLOW_BUILTIN=crypto` and permits environment access for these trusted workflows. Do not grant untrusted users workflow-editor access to this local instance.
-8. Publish/activate workflows A and B. A uses the permanent path `/webhook/lendloop-events`. The HMAC binds this exact path; `/webhook-test/` deliberately does not work with this export.
+8. Publish/activate all three workflows. On n8n 2.45.7 the error workflow must be published too: the live run logged `Workflow "…" is not active and cannot be executed` for an unpublished one. The Compose files set `CODE_ENABLE_STDOUT=true`, so the sanitized mock-notification line of production executions reaches the container log. A uses the permanent path `/webhook/lendloop-events`. The HMAC binds this exact path; `/webhook-test/` deliberately does not work with this export.
 9. Set `N8N_WEBHOOK_URL` in Convex to the **reachable** permanent webhook URL. A cloud Convex deployment cannot reach your PC's `localhost`, so the live demo uses the hosted instance described in [Host n8n for the live demo](#host-n8n-for-the-live-demo). Do not assume `WEBHOOK_URL` exposes a local service; it only tells n8n its external URL.
 10. Create a request and inspect n8n Executions and the Convex `events` / `notificationResults` tables. Only an authenticated completion callback sets `simulated`. An HTTP 200 from the webhook alone is not success.
 
@@ -181,18 +181,18 @@ There is no payment system, messaging, address exchange, real email delivery or 
 
 `compose.hosted.yaml` runs the same pinned n8n image behind an HTTPS reverse proxy (I use Coolify/Traefik on a dedicated server), with its own host name, volume and secrets; nothing is shared with other services. It exposes no host port, enables secure cookies and takes every value from the hosting platform's environment settings:
 
-| Variable                                                  | Value                                                         |
-| --------------------------------------------------------- | ------------------------------------------------------------- |
-| `N8N_HOST`                                                | Public host name; the platform terminates TLS for it          |
-| `N8N_ENCRYPTION_KEY`                                      | Random 32+ characters; back it up together with the volume    |
-| `AUTOMATION_OUTBOUND_SECRET`, `AUTOMATION_INBOUND_SECRET` | The same two values set in Convex                             |
+| Variable                                                  | Value                                                        |
+| --------------------------------------------------------- | ------------------------------------------------------------ |
+| `N8N_HOST`                                                | Public host name; the platform terminates TLS for it         |
+| `N8N_ENCRYPTION_KEY`                                      | Random 32+ characters; back it up together with the volume   |
+| `AUTOMATION_OUTBOUND_SECRET`, `AUTOMATION_INBOUND_SECRET` | The same two values set in Convex                            |
 | `CONVEX_SITE_URL`                                         | The `.convex.site` HTTP Actions URL of the target deployment |
 
 After the first start, create the owner account with a strong password and MFA, import the three workflows as in steps 6–8 above, and set `N8N_WEBHOOK_URL` in Convex to `https://<N8N_HOST>/webhook/lendloop-events`. The editor stays behind the owner login; it is a single-owner demo instance with fictional data, not a hardened production setup (see [production readiness](docs/production.md)).
 
 ## Deploy the web app
 
-Nothing here publishes automatically, and the repository stays private during review.
+Nothing here publishes automatically.
 
 1. In the target Convex deployment, set `CLERK_JWT_ISSUER_DOMAIN`, `N8N_WEBHOOK_URL` and the two automation secrets.
 2. Import the repository in Vercel (framework Next.js, Node.js 22.x). Add `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` and `CLERK_SECRET_KEY` from the same Clerk instance, and `CONVEX_DEPLOY_KEY` (a deploy key for that Convex deployment, Production environment only).
