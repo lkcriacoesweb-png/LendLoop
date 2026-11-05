@@ -37,11 +37,27 @@ export function ToolIcon({
             : Wrench;
   return <Icon size={size} strokeWidth={1.5} aria-hidden="true" />;
 }
+const author = {
+  name: "Lucas Mateus Lopes",
+  profile: "https://www.linkedin.com/in/lucasmateuslopes/",
+  studio: "LK Criações Web",
+  site: "https://lkcriacoesweb.com.br",
+};
 export function Footer() {
   return (
     <footer>
       <Brand />
       <span>Good tools. Better neighbors.</span>
+      <span className="footer-credit">
+        Built by{" "}
+        <a href={author.profile} target="_blank" rel="noopener noreferrer">
+          {author.name}
+        </a>{" "}
+        ·{" "}
+        <a href={author.site} target="_blank" rel="noopener noreferrer">
+          {author.studio}
+        </a>
+      </span>
       <a href="#main">
         Back to top <ArrowUpRight size={15} />
       </a>

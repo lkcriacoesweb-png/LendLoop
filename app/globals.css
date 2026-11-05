@@ -608,6 +608,11 @@ footer > a {
   align-items: center;
   gap: 6px;
 }
+.footer-credit a {
+  color: var(--ink);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
 .app-shell {
   display: flex;
   min-height: 100vh;
