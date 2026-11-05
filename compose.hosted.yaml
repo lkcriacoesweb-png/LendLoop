@@ -26,6 +26,8 @@ services:
       N8N_RUNNERS_MODE: internal
       NODE_FUNCTION_ALLOW_BUILTIN: crypto
       N8N_BLOCK_ENV_ACCESS_IN_NODE: "false"
+      # Production executions write the sanitized mock-notification line to stdout (docker logs).
+      CODE_ENABLE_STDOUT: "true"
       N8N_DIAGNOSTICS_ENABLED: "false"
       N8N_PERSONALIZATION_ENABLED: "false"
       N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS: "true"

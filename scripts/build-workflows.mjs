@@ -151,7 +151,8 @@ const errors = workflow("LendLoop — C · Sanitized error log", [
     "Log failure reference",
     `const data=$input.first().json;
 const output={ outcome:'workflow_failed', workflowId:String(data.workflow?.id || 'unknown'), executionId:String(data.execution?.id || 'unknown') };
-console.error(JSON.stringify(output)); return [{json:output}];`,
+// The n8n task runner forwards only console.log (other console methods are no-ops); CODE_ENABLE_STDOUT sends it to stdout.
+console.log(JSON.stringify(output)); return [{json:output}];`,
     230,
   ),
 ]);

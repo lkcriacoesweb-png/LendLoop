@@ -17,6 +17,7 @@ const a = JSON.parse(
 const b = JSON.parse(
   readFileSync("n8n/workflows/overdue-reminders.json", "utf8"),
 );
+const c = JSON.parse(readFileSync("n8n/workflows/error-handler.json", "utf8"));
 const outbound = "test-only-outbound-not-a-real-secret-123456";
 const inbound = "test-only-inbound-not-a-real-secret-abcdef";
 type Item = { json: Record<string, any> };
@@ -150,6 +151,24 @@ describe("exported n8n workflow contracts with Convex HTTP", () => {
     expect(
       await t.run((ctx) => ctx.db.query("notificationResults").collect()),
     ).toHaveLength(1);
+  });
+  it("error workflow logs only a sanitized reference, through console.log (the only console method n8n forwards)", async () => {
+    const log = vi.spyOn(console, "log").mockImplementation(() => {});
+    const out = await execute(c, "Log failure reference", [
+      {
+        json: {
+          workflow: { id: "wf-1" },
+          execution: { id: "42", error: { message: "fictional detail" } },
+        },
+      },
+    ]);
+    expect(log).toHaveBeenCalledTimes(1);
+    expect(log.mock.calls.flat().join()).not.toContain("fictional detail");
+    expect(out[0].json).toEqual({
+      outcome: "workflow_failed",
+      workflowId: "wf-1",
+      executionId: "42",
+    });
   });
   it("rejects invalid signatures in the actual exported receiver and Convex HTTP route", async () => {
     const { t } = await fixture();

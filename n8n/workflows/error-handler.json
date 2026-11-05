@@ -22,7 +22,7 @@
         0
       ],
       "parameters": {
-        "jsCode": "const data=$input.first().json;\nconst output={ outcome:'workflow_failed', workflowId:String(data.workflow?.id || 'unknown'), executionId:String(data.execution?.id || 'unknown') };\nconsole.error(JSON.stringify(output)); return [{json:output}];"
+        "jsCode": "const data=$input.first().json;\nconst output={ outcome:'workflow_failed', workflowId:String(data.workflow?.id || 'unknown'), executionId:String(data.execution?.id || 'unknown') };\n// The n8n task runner forwards only console.log (other console methods are no-ops); CODE_ENABLE_STDOUT sends it to stdout.\nconsole.log(JSON.stringify(output)); return [{json:output}];"
       }
     }
   ],
